@@ -207,10 +207,8 @@ def lin_momentum(mu_prev, mu_curr, mu_stream,
         updated mu_stream (stale): to use for fprop
         updated mu_stream (current): to cache for next iteration
     """
-    input = torch.cat([mu_prev[1:], mu_curr]).transpose(0, 1).unsqueeze(1)
-    tmp = torch.nn.functional.conv1d(input, momentum_pow).squeeze().transpose(0, 1)
-    curr = (momentum_batch * mu_stream + (1 - momentum) * tmp)
-
+    tmp = torch.einsum("bf,b->f", mu_prev[1:], momentum_pow[:-1]) + momentum_pow[-1] * mu_curr
+    curr = momentum_batch * mu_stream + (1 - momentum) * tmp
     return torch.cat([mu_stream[-1].unsqueeze(0), curr[:-1]]), curr
 
 
@@ -383,10 +381,10 @@ class Norm1dBatched(nn.Module):
 
                 if self.af_pow is None:
                     range_b = torch.arange(self.batch_size - 1, -1, -1).type(input.type())
-                    self.af_pow = (self.afwd ** range_b).view(1, 1, -1)
+                    self.af_pow = self.afwd ** range_b
                     self.af_batch = input.new_full((self.batch_size, num_features),
                                                    self.afwd ** self.batch_size)
-                    self.ab_pow = (self.abkw ** range_b).view(1, 1, -1)
+                    self.ab_pow = self.abkw ** range_b
                     self.ab_batch = input.new_full((self.batch_size, num_features),
                                                    self.abkw ** self.batch_size)
 
